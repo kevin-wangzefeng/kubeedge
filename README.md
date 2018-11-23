@@ -1,4 +1,6 @@
 # KubeEdge
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkevin-wangzefeng%2Fkubeedge.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkevin-wangzefeng%2Fkubeedge?ref=badge_shield)
+
 
 <img src="./images/KubeEdge_logo.png">
 
@@ -164,3 +166,7 @@ That said, if you have questions, reach out to us, feel free to reach out to the
 - @islinwb 
 - @Lion-Wei 
 
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkevin-wangzefeng%2Fkubeedge.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkevin-wangzefeng%2Fkubeedge?ref=badge_large)
