@@ -89,24 +89,21 @@ A `device model` describes the device properties exposed by the device and prope
 // DeviceModelSpec defines the model / template for a device.It is a blueprint which describes the device
 // capabilities and access mechanism via property visitors.
 type DeviceModelSpec struct {
-  // List of device properties.
-  // Required.
+  // Required: List of device properties.
   DeviceProperties       []DeviceProperty        `json:"properties,omitempty"`
-  // List of property visitors which describe how to access the device properties.
-  // Required.
+  // Required: List of property visitors which describe how to access the device properties.
   DevicePropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
 }
 
 // DeviceProperty describes an individual device property / attribute like temperature / humidity etc.
 type DeviceProperty struct {
-  // The device property name.
-  // Required.
+  // Required: The device property name.
   Name         string            `json:"name,omitempty"`
   // The device property description.
   // +optional
   Description  string            `json:"description,omitempty"`
-  // Additional configuration about the device property like datatype, range, min, max etc.
-  // Optional: If no configuration details are provided, it is assumed that the property is an empty read-only string.
+  // Optional: Additional configuration about the device property like datatype, range, min, max etc.
+  // If no configuration details are provided, it is assumed that the property is an empty read-only string.
   // +optional
   Config       map[string]string `json:"config,omitempty"`
 }
@@ -118,11 +115,9 @@ type DeviceProperty struct {
 // protocol , the visitors would describe the 128-bit UUIDs to read / write charactersitics of a Bluetooth
 // service exposed by the device.
 type DevicePropertyVisitor struct {
-  // The protocol type to connect to the device and access the property.
-  // Required.
+  // Required: The protocol type to connect to the device and access the property.
   Protocol     ProtocolType      `json:"protocol,omitempty"`
-  // A list of visitors describing the properties which can be accessed with the protocol.
-  // Required.
+  // Required: A list of visitors describing the properties which can be accessed with the protocol.
   Visitors     []PropertyVisitor `json:"visitors,omitempty"`
 }
 
@@ -145,15 +140,12 @@ const (
 // PropertyVisitor contains details like which property can be accessed and the
 // access mechanisms are described via key-value pairs in the metadata.
 type PropertyVisitor struct {
-  // The device property visitor name.
-  // Required.
+  // Required: The device property visitor name.
   Name         string            `json:"name,omitempty"`
-  // The device property name to be accessed. This should refer to one of the
+  // Required: The device property name to be accessed. This should refer to one of the
   // device properties defined in the device model.
-  // Required.
   PropertyName string            `json:"propertyName,omitempty"`
-  // Additional metadata about the how to access the device property.
-  // Required.
+  // Required: Additional metadata about the how to access the device property.
   Config       map[string]string `json:"config,omitempty"`
 }
 
@@ -232,27 +224,23 @@ A `device` instance represents an actual device object. It is like an instantiat
 ```go
 // DeviceSpec represents a single device instance. It is an instantation of a device model.
 type DeviceSpec struct {
-  // DeviceModelRef is reference to the device model used as a template
+  // Required: DeviceModelRef is reference to the device model used as a template
   // to create the device instance.
-  // Required.
   DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
-  // The protocol configuration used to connect to the device.
-  // Required.
+  // Required: The protocol configuration used to connect to the device.
   Protocol       Protocol                   `json:"protocol,omitempty"`
   // The edge node name to which the device belongs.
-  // Optional: Defaults to empty string indicating the device is currently not bound to any edge node.
+  // Defaults to empty string indicating the device is currently not bound to any edge node.
   // +optional
   NodeName       string                     `json:"nodeName,omitempty"`
 }
 
 // Protocol contains the communication protocol details to connect to a device and read/write data.
 type Protocol struct {
-  // The Protocol name. Since a device can support multiple protocols with different configurations,
+  // Required: The Protocol name. Since a device can support multiple protocols with different configurations,
   // the protocol name is used for differentiation.
-  // Required.
   Name   string            `json:"name,omitempty"`
-  // The Protocol type e.g. BLE, Modbus, OPC UA, ZigBee etc.
-  // Required.
+  // Required: The Protocol type e.g. BLE, Modbus, OPC UA, ZigBee etc.
   Type   ProtocolType      `json:"type,omitempty"`
   // Additional protocol configuration like server url, number of slave nodes/ connections etc.
   // This depends on the specific protocol.
@@ -266,7 +254,7 @@ type DeviceStatus struct {
   // Optional: Defaults to `unknown`.
   // +optional
   State string `json:"state,omitempty"`
-  // a list of device twins containing expected/actual states of control properties.
+  // A list of device twins containing expected/actual states of control properties.
   // Optional: A passive device won't have control attributes and this list could be empty.
   // +optional
   Twins []Twin `json:"twins,omitempty"`
@@ -280,25 +268,20 @@ type DeviceStatus struct {
 // the actual state to the cloud. Offline device interaction in the edge is possible via twin
 // properties for control/command operations.
 type Twin struct {
-  // The property name for which the expected/actual values are reported.
+  // Required: The property name for which the expected/actual values are reported.
   // This property should be present in the device model.
-  // Required.
   Name     string    `json:"name,omitempty"`
-  // the expected attribute value for this property.
-  // Required.
+  // Required: the expected attribute value for this property.
   Expected Attribute `json:"expected,omitempty"`
-  // the actual attribute value for this property.
-  // Required.
+  // Required: the actual attribute value for this property.
   Actual   Attribute `json:"actual,omitempty"`
 }
 
 // Attribute represents the device property for which an Expected/Actual state can be defined.
 type Attribute struct {
-  // Describes whether this property is optional or not.
-  // Required.
+  // Required: Describes whether this property is optional or not.
   Optional string            `json:"optional,omitempty"`
-  // The value for this attribute.
-  // Required.
+  // Required: The value for this attribute.
   Value    string            `json:"value,omitempty"`
   // Additional metadata like timestamp when the value was reported etc.
   // +optional
