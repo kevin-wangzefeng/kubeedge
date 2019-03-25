@@ -89,73 +89,122 @@ A `device model` describes the device properties exposed by the device and prope
 // DeviceModelSpec defines the model / template for a device.It is a blueprint which describes the device
 // capabilities and access mechanism via property visitors.
 type DeviceModelSpec struct {
-  // List of device properties.
-  // Required.
-  DeviceProperties       []DeviceProperty        `json:"properties,omitempty"`
-  // List of property visitors which describe how to access the device properties.
-  // Required.
-  DevicePropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
+	// Required: List of device properties.
+	Properties []DeviceProperty `json:"properties,omitempty"`
+	// Required: List of property visitors which describe how to access the device properties.
+	// PropertyVisitors must unique by propertyVisitor.propertyName.
+	PropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
 }
 
 // DeviceProperty describes an individual device property / attribute like temperature / humidity etc.
 type DeviceProperty struct {
-  // The device property name.
-  // Required.
-  Name         string            `json:"name,omitempty"`
-  // The device property description.
-  // +optional
-  Description  string            `json:"description,omitempty"`
-  // Additional configuration about the device property like datatype, range, min, max etc.
-  // Optional: If no configuration details are provided, it is assumed that the property is an empty read-only string.
-  // +optional
-  Config       map[string]string `json:"config,omitempty"`
+	// Required: The device property name.
+	Name string `json:"name,omitempty"`
+	// The device property description.
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Required: PropertyType represents the type and data validation of the property.
+	PropertyType `json:",inline"`
 }
+
+// Represents the type and data validation of a property.
+// Only one of its members may be specified.
+type PropertyType struct {
+	// +optional
+	Int PropertyTypeInt64 `json:"int,omitempty"`
+	// +optional
+	String PropertyTypeString `json:"string,omitempty"`
+}
+
+type PropertyTypeInt64 struct {
+	// Required: Access mode of property, ReadWrite or ReadOnly.
+	AccessMode PropertyAccessMode `json:"accessMode,omitempty"`
+	// +optional
+	DefaultValue int64 `json:"defaultValue,omitempty"`
+	// +optional
+	Minimum int64 `json:"minimum,omitempty"`
+	// +optional
+	Maximum int64 `json:"maximum,omitempty"`
+	// The unit of the property
+	// +optional
+	Unit string `json:"unit,omitempty"`
+}
+
+type PropertyTypeString struct {
+	// Required: Access mode of property, ReadWrite or ReadOnly.
+	AccessMode PropertyAccessMode `json:"accessMode,omitempty"`
+	// +optional
+	DefaultValue string `json:"defaultValue,omitempty"`
+}
+
+type PropertyAccessMode string
+
+const (
+	ReadWrite PropertyAccessMode = "ReadWrite"
+	ReadOnly  PropertyAccessMode = "ReadOnly"
+)
 
 // DevicePropertyVisitor describes the specifics of accessing a particular device
 // property. Visitors are intended to be consumed by device mappers which connect to devices
-// and collect data / perform actions on the device. A device may support multiple protocols.
-// We can define multiple visitors per protocol for a device. For e.g If a device supports Bluetooth
-// protocol , the visitors would describe the 128-bit UUIDs to read / write charactersitics of a Bluetooth
-// service exposed by the device.
+// and collect data / perform actions on the device.
+// A device may support multiple protocols. With visitorConfig,
+// users can define property access details per protocol per property for a device.
 type DevicePropertyVisitor struct {
-  // The protocol type to connect to the device and access the property.
-  // Required.
-  Protocol     ProtocolType      `json:"protocol,omitempty"`
-  // A list of visitors describing the properties which can be accessed with the protocol.
-  // Required.
-  Visitors     []PropertyVisitor `json:"visitors,omitempty"`
+	// Required: The device property name to be accessed. This should refer to one of the
+	// device properties defined in the device model.
+	PropertyName string `json:"propertyName,omitempty"`
+	// Required: Protocol relevant config details about the how to access the device property.
+	VisitorConfig `json:",inline"`
 }
 
-// ProtocolType describes the protocol type used to communicate with the device instance.
-type ProtocolType string
+// At least one of its members must be specified.
+type VisitorConfig struct {
+	// Opcua represents a set of additional visitor config fields of opc-ua protocol.
+	// +optional
+	OpcUA VisitorConfigOPCUA `json:"opcua,omitempty"`
+	// Modbus represents a set of additional visitor config fields of modbus protocol.
+	// +optional
+	Modbus VisitorConfigModbus `json:"modbus,omitempty"`
+}
+
+// Common visitor configurations for opc-ua protocol
+type VisitorConfigOPCUA struct {
+	// Required: The ID of opc-ua node, e.g. "ns=1,i=1005"
+	NodeID string `json:"nodeID,omitempty"`
+	// The name of opc-ua node
+	BrowseName string `json:"browseName,omitempty"`
+}
+
+// Common visitor configurations for modbus protocol
+type VisitorConfigModbus struct {
+	// Required: Type of register
+	Register ModbusRegisterType `json:"register,omitempty"`
+	// Required: Offset indicates the starting register number to read/write data.
+	Offset int64 `json:"offset,omitempty"`
+	// Required: Limit number of registers to read/write.
+	Limit int64 `json:"limit,omitempty"`
+	// The scale to convert raw property data into final units.
+	// Defaults to 1.0
+	// +optional
+	Scale float64 `json:"scale,omitempty"`
+	// Indicates whether the high and low byte swapped.
+	// Defaults to false.
+	// +optional
+	IsSwap bool `json:"isSwap,omitempty"`
+	// Indicates whether the high and low register swapped.
+	// Defaults to false.
+	// +optional
+	IsRegisterSwap bool `json:"isRegisterSwap,omitempty"`
+}
+
+type ModbusRegisterType string
 
 const (
-	// Bluetooth Low Energy(BLE) Protocol
-	BluetoothLE  ProtocolType = "BluetoothLE"
-	// Zigbee Protocol
-	Zigbee       ProtocolType = "Zigbee"
-	// Modbus Protocol
-	Modbus       ProtocolType = "Modbus"
-	// BACnet Protocol
-	BACnet       ProtocolType = "BACnet"
-	// OPC UA Protocol
-	OPCUA        ProtocolType = "OPCUA"
+	ModbusRegisterTypeCoilRegister          ModbusRegisterType = "CoilRegister"
+	ModbusRegisterTypeDiscreteInputRegister ModbusRegisterType = "DiscreteInputRegister"
+	ModbusRegisterTypeInputRegister         ModbusRegisterType = "InputRegister"
+	ModbusRegisterTypeHoldingRegister       ModbusRegisterType = "HoldingRegister"
 )
-
-// PropertyVisitor contains details like which property can be accessed and the
-// access mechanisms are described via key-value pairs in the metadata.
-type PropertyVisitor struct {
-  // The device property visitor name.
-  // Required.
-  Name         string            `json:"name,omitempty"`
-  // The device property name to be accessed. This should refer to one of the
-  // device properties defined in the device model.
-  // Required.
-  PropertyName string            `json:"propertyName,omitempty"`
-  // Additional metadata about the how to access the device property.
-  // Required.
-  Config       map[string]string `json:"config,omitempty"`
-}
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -232,27 +281,23 @@ A `device` instance represents an actual device object. It is like an instantiat
 ```go
 // DeviceSpec represents a single device instance. It is an instantation of a device model.
 type DeviceSpec struct {
-  // DeviceModelRef is reference to the device model used as a template
+  // Required: DeviceModelRef is reference to the device model used as a template
   // to create the device instance.
-  // Required.
   DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
-  // The protocol configuration used to connect to the device.
-  // Required.
+  // Required: The protocol configuration used to connect to the device.
   Protocol       Protocol                   `json:"protocol,omitempty"`
   // The edge node name to which the device belongs.
-  // Optional: Defaults to empty string indicating the device is currently not bound to any edge node.
+  // Defaults to empty string indicating the device is currently not bound to any edge node.
   // +optional
   NodeName       string                     `json:"nodeName,omitempty"`
 }
 
 // Protocol contains the communication protocol details to connect to a device and read/write data.
 type Protocol struct {
-  // The Protocol name. Since a device can support multiple protocols with different configurations,
+  // Required: The Protocol name. Since a device can support multiple protocols with different configurations,
   // the protocol name is used for differentiation.
-  // Required.
   Name   string            `json:"name,omitempty"`
-  // The Protocol type e.g. BLE, Modbus, OPC UA, ZigBee etc.
-  // Required.
+  // Required: The Protocol type e.g. BLE, Modbus, OPC UA, ZigBee etc.
   Type   ProtocolType      `json:"type,omitempty"`
   // Additional protocol configuration like server url, number of slave nodes/ connections etc.
   // This depends on the specific protocol.
@@ -266,7 +311,7 @@ type DeviceStatus struct {
   // Optional: Defaults to `unknown`.
   // +optional
   State string `json:"state,omitempty"`
-  // a list of device twins containing expected/actual states of control properties.
+  // A list of device twins containing expected/actual states of control properties.
   // Optional: A passive device won't have control attributes and this list could be empty.
   // +optional
   Twins []Twin `json:"twins,omitempty"`
@@ -280,25 +325,20 @@ type DeviceStatus struct {
 // the actual state to the cloud. Offline device interaction in the edge is possible via twin
 // properties for control/command operations.
 type Twin struct {
-  // The property name for which the expected/actual values are reported.
+  // Required: The property name for which the expected/actual values are reported.
   // This property should be present in the device model.
-  // Required.
   Name     string    `json:"name,omitempty"`
-  // the expected attribute value for this property.
-  // Required.
+  // Required: the expected attribute value for this property.
   Expected Attribute `json:"expected,omitempty"`
-  // the actual attribute value for this property.
-  // Required.
+  // Required: the actual attribute value for this property.
   Actual   Attribute `json:"actual,omitempty"`
 }
 
 // Attribute represents the device property for which an Expected/Actual state can be defined.
 type Attribute struct {
-  // Describes whether this property is optional or not.
-  // Required.
+  // Required: Describes whether this property is optional or not.
   Optional string            `json:"optional,omitempty"`
-  // The value for this attribute.
-  // Required.
+  // Required: The value for this attribute.
   Value    string            `json:"value,omitempty"`
   // Additional metadata like timestamp when the value was reported etc.
   // +optional
