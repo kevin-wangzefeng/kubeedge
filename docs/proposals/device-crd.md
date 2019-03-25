@@ -95,17 +95,45 @@ type DeviceModelSpec struct {
   DevicePropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
 }
 
+type PropertyTypeName string
+const (
+	PropertyTypeNameString PropertyTypeName = "String"
+	PropertyTypeNameINT32 PropertyTypeName = "Float"
+)
+type PropertyAccessMode string
+const (
+	ReadWrite PropertyAccessMode = "ReadWrite"
+	ReadOnly  PropertyAccessMode = "ReadOnly"
+)
+
+type PropertyType interface {}
+
+type PropertyTypeFloat struct {
+	DefaultValue   float64
+	Size           float64
+	Minimum        float64
+	Maximum        float64
+}
+
+type PropertyTypeString struct {
+	DefaultValue   string
+	MinLen         int
+	MaxLen         int
+}
+
 // DeviceProperty describes an individual device property / attribute like temperature / humidity etc.
 type DeviceProperty struct {
   // Required: The device property name.
-  Name         string            `json:"name,omitempty"`
+  Name           string            `json:"name,omitempty"`
   // The device property description.
   // +optional
-  Description  string            `json:"description,omitempty"`
-  // Optional: Additional configuration about the device property like datatype, range, min, max etc.
-  // If no configuration details are provided, it is assumed that the property is an empty read-only string.
-  // +optional
-  Config       map[string]string `json:"config,omitempty"`
+  Description    string            `json:"description,omitempty"`
+  
+  // Required.
+  Type           PropertyTypeName
+  // Required.
+  AccessMode     PropertyAccessMode
+  PropertyType
 }
 
 // DevicePropertyVisitor describes the specifics of accessing a particular device
@@ -125,26 +153,34 @@ type DevicePropertyVisitor struct {
 type ProtocolType string
 
 const (
-	// Bluetooth Low Energy(BLE) Protocol
-	BluetoothLE  ProtocolType = "BluetoothLE"
-	// Zigbee Protocol
-	Zigbee       ProtocolType = "Zigbee"
 	// Modbus Protocol
 	Modbus       ProtocolType = "Modbus"
-	// BACnet Protocol
-	BACnet       ProtocolType = "BACnet"
 	// OPC UA Protocol
 	OPCUA        ProtocolType = "OPCUA"
+	
+	// Uncomment this when BluetoothLE is implemented.
+	// // Bluetooth Low Energy(BLE) Protocol
+	// BluetoothLE  ProtocolType = "BluetoothLE"
+	
+	// Uncomment this when Zigbee is implemented.
+	// // Zigbee Protocol
+	// Zigbee       ProtocolType = "Zigbee"
+	
+	// Uncomment this when BACnet is implemented.
+	// // BACnet Protocol
+	// BACnet       ProtocolType = "BACnet"
 )
 
 type VisitorConfig interface {}
 
+// Common vistor configuration fields for opc-ua protocol
 type VisitorConfigOPCUA struct {
-	// Required: The Id of OPC-UA node, e.g. "ns=1,i=1005"
+	// Required: The Id of opc-ua node, e.g. "ns=1,i=1005"
 	NodeId       string
 	BrowseName   string
 }
 
+// Common vistor configuration fields for modbus protocol
 type VisitorConfigModBus struct {
 	Register        string
 	Index           int64
