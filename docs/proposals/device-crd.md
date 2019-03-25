@@ -137,16 +137,31 @@ const (
 	OPCUA        ProtocolType = "OPCUA"
 )
 
+type VisitorConfig interface {}
+
+type VisitorConfigOPCUA struct {
+	// Required: The Id of OPC-UA node, e.g. "ns=1,i=1005"
+	NodeId       string
+	BrowseName   string
+}
+
+type VisitorConfigModBus struct {
+	Register        string
+	Index           int64
+	Offset          int64
+	Scale           float64
+	IsSwap          bool
+	IsRegisterSwap  bool
+}
+
 // PropertyVisitor contains details like which property can be accessed and the
 // access mechanisms are described via key-value pairs in the metadata.
 type PropertyVisitor struct {
-  // Required: The device property visitor name.
-  Name         string            `json:"name,omitempty"`
   // Required: The device property name to be accessed. This should refer to one of the
   // device properties defined in the device model.
   PropertyName string            `json:"propertyName,omitempty"`
   // Required: Additional metadata about the how to access the device property.
-  Config       map[string]string `json:"config,omitempty"`
+  Config       VisitorConfig     `json:"config,omitempty"`
 }
 
 // +genclient
