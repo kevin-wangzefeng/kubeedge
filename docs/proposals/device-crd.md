@@ -89,116 +89,116 @@ A `device model` describes the device properties exposed by the device and prope
 // DeviceModelSpec defines the model / template for a device.It is a blueprint which describes the device
 // capabilities and access mechanism via property visitors.
 type DeviceModelSpec struct {
-  // Required: List of device properties.
-  DeviceProperties       []DeviceProperty        `json:"properties,omitempty"`
-  // Required: List of property visitors which describe how to access the device properties.
-  DevicePropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
+	// Required: List of device properties.
+	Properties []DeviceProperty `json:"properties,omitempty"`
+	// Required: List of property visitors which describe how to access the device properties.
+	PropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
 }
 
-type PropertyTypeName string
-const (
-	PropertyTypeNameString PropertyTypeName = "String"
-	PropertyTypeNameINT32 PropertyTypeName = "Float"
-)
+// DeviceProperty describes an individual device property / attribute like temperature / humidity etc.
+type DeviceProperty struct {
+	// Required: The device property name.
+	Name string `json:"name,omitempty"`
+	// The device property description.
+	// +optional
+	Description string `json:"description,omitempty"`
+	// Required: PropertyType represents the type and data validation of the property.
+	PropertyType `json:",inline"`
+}
+
+// Represents the type and data validation of a property.
+// Only one of its members may be specified.
+type PropertyType struct {
+	// +optional
+	Int    PropertyTypeInt64
+	// +optional
+	String PropertyTypeString
+}
+
+type PropertyTypeInt64 struct {
+	// Access mode of property, ReadWrite or ReadOnly.
+	AccessMode   PropertyAccessMode
+	// +optional
+	DefaultValue int64
+	// +optional
+	Minimum      int64
+	// +optional
+	Maximum      int64
+	// The unit of the property
+	// +optional
+	Unit         string
+}
+
+type PropertyTypeString struct {
+	// +optional
+	AccessMode   PropertyAccessMode
+	// +optional
+	DefaultValue string
+}
+
 type PropertyAccessMode string
+
 const (
 	ReadWrite PropertyAccessMode = "ReadWrite"
 	ReadOnly  PropertyAccessMode = "ReadOnly"
 )
 
-type PropertyType interface {}
-
-type PropertyTypeFloat struct {
-	DefaultValue   float64
-	Size           float64
-	Minimum        float64
-	Maximum        float64
-}
-
-type PropertyTypeString struct {
-	DefaultValue   string
-	MinLen         int
-	MaxLen         int
-}
-
-// DeviceProperty describes an individual device property / attribute like temperature / humidity etc.
-type DeviceProperty struct {
-  // Required: The device property name.
-  Name           string            `json:"name,omitempty"`
-  // The device property description.
-  // +optional
-  Description    string            `json:"description,omitempty"`
-  
-  // Required.
-  Type           PropertyTypeName
-  // Required.
-  AccessMode     PropertyAccessMode
-  PropertyType
-}
-
-// DevicePropertyVisitor describes the specifics of accessing a particular device
-// property. Visitors are intended to be consumed by device mappers which connect to devices
-// and collect data / perform actions on the device. A device may support multiple protocols.
-// We can define multiple visitors per protocol for a device. For e.g If a device supports Bluetooth
-// protocol , the visitors would describe the 128-bit UUIDs to read / write charactersitics of a Bluetooth
-// service exposed by the device.
+// DevicePropertyVisitor contains details like which property can be accessed and the
+// access mechanisms are described via key-value pairs in the metadata.
 type DevicePropertyVisitor struct {
-  // Required: The protocol type to connect to the device and access the property.
-  Protocol     ProtocolType      `json:"protocol,omitempty"`
-  // Required: A list of visitors describing the properties which can be accessed with the protocol.
-  Visitors     []PropertyVisitor `json:"visitors,omitempty"`
+	// Required: The device property name to be accessed. This should refer to one of the
+	// device properties defined in the device model.
+	PropertyName string `json:"propertyName,omitempty"`
+	// Required: Additional metadata about the how to access the device property.
+	VisitorConfig `json:",inline"`
 }
 
-// ProtocolType describes the protocol type used to communicate with the device instance.
-type ProtocolType string
+// Only one of its members may be specified.
+type VisitorConfig struct {
+	// +optional
+	OpcUA  VisitorConfigOPCUA
+	// +optional
+	Modbus VisitorConfigModbus
+}
 
-const (
-	// Modbus Protocol
-	Modbus       ProtocolType = "Modbus"
-	// OPC UA Protocol
-	OPCUA        ProtocolType = "OPCUA"
-	
-	// Uncomment this when BluetoothLE is implemented.
-	// // Bluetooth Low Energy(BLE) Protocol
-	// BluetoothLE  ProtocolType = "BluetoothLE"
-	
-	// Uncomment this when Zigbee is implemented.
-	// // Zigbee Protocol
-	// Zigbee       ProtocolType = "Zigbee"
-	
-	// Uncomment this when BACnet is implemented.
-	// // BACnet Protocol
-	// BACnet       ProtocolType = "BACnet"
-)
-
-type VisitorConfig interface {}
-
-// Common vistor configuration fields for opc-ua protocol
+// Common visitor configurations for opc-ua protocol
 type VisitorConfigOPCUA struct {
 	// Required: The Id of opc-ua node, e.g. "ns=1,i=1005"
-	NodeId       string
-	BrowseName   string
+	NodeId string
+	// The name of opc-ua node
+	BrowseName string
 }
 
-// Common vistor configuration fields for modbus protocol
-type VisitorConfigModBus struct {
-	Register        string
-	Index           int64
-	Offset          int64
-	Scale           float64
-	IsSwap          bool
-	IsRegisterSwap  bool
+// Common visitor configurations for modbus protocol
+type VisitorConfigModbus struct {
+	// Required: Type of register
+	Register ModbusRegisterType
+	// Required: Offset indicates the starting register number to read/write data.
+	Offset int64
+	// Required: Limit number of registers to read/write.
+	Limit int64
+	// The scale
+	// Defaults to 1.0
+	// +optional
+	Scale float64
+	// Indicates whether the high and low byte swapped.
+	// Defaults to false.
+	// +optional
+	IsSwap bool
+	// Indicates whether the high and low register swapped.
+	// Defaults to false.
+	// +optional
+	IsRegisterSwap bool
 }
 
-// PropertyVisitor contains details like which property can be accessed and the
-// access mechanisms are described via key-value pairs in the metadata.
-type PropertyVisitor struct {
-  // Required: The device property name to be accessed. This should refer to one of the
-  // device properties defined in the device model.
-  PropertyName string            `json:"propertyName,omitempty"`
-  // Required: Additional metadata about the how to access the device property.
-  Config       VisitorConfig     `json:"config,omitempty"`
-}
+type ModbusRegisterType string
+
+const (
+	ModbusRegisterTypeCoilRegister          ModbusRegisterType = "CoilRegister"
+	ModbusRegisterTypeDiscreteInputRegister ModbusRegisterType = "DiscreteInputRegister"
+	ModbusRegisterTypeInputRegister         ModbusRegisterType = "InputRegister"
+	ModbusRegisterTypeHoldingRegister       ModbusRegisterType = "HoldingRegister"
+)
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
