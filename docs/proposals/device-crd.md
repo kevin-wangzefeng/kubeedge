@@ -92,6 +92,7 @@ type DeviceModelSpec struct {
 	// Required: List of device properties.
 	Properties []DeviceProperty `json:"properties,omitempty"`
 	// Required: List of property visitors which describe how to access the device properties.
+	// PropertyVisitors must unique by propertyVisitor.propertyName.
 	PropertyVisitors []DevicePropertyVisitor `json:"propertyVisitors,omitempty"`
 }
 
@@ -110,30 +111,30 @@ type DeviceProperty struct {
 // Only one of its members may be specified.
 type PropertyType struct {
 	// +optional
-	Int    PropertyTypeInt64
+	Int PropertyTypeInt64 `json:"int,omitempty"`
 	// +optional
-	String PropertyTypeString
+	String PropertyTypeString `json:"string,omitempty"`
 }
 
 type PropertyTypeInt64 struct {
-	// Access mode of property, ReadWrite or ReadOnly.
-	AccessMode   PropertyAccessMode
+	// Required: Access mode of property, ReadWrite or ReadOnly.
+	AccessMode PropertyAccessMode `json:"accessMode,omitempty"`
 	// +optional
-	DefaultValue int64
+	DefaultValue int64 `json:"defaultValue,omitempty"`
 	// +optional
-	Minimum      int64
+	Minimum int64 `json:"minimum,omitempty"`
 	// +optional
-	Maximum      int64
+	Maximum int64 `json:"maximum,omitempty"`
 	// The unit of the property
 	// +optional
-	Unit         string
+	Unit string `json:"unit,omitempty"`
 }
 
 type PropertyTypeString struct {
+	// Required: Access mode of property, ReadWrite or ReadOnly.
+	AccessMode PropertyAccessMode `json:"accessMode,omitempty"`
 	// +optional
-	AccessMode   PropertyAccessMode
-	// +optional
-	DefaultValue string
+	DefaultValue string `json:"defaultValue,omitempty"`
 }
 
 type PropertyAccessMode string
@@ -143,8 +144,11 @@ const (
 	ReadOnly  PropertyAccessMode = "ReadOnly"
 )
 
-// DevicePropertyVisitor contains details like which property can be accessed and the
-// access mechanisms are described via key-value pairs in the metadata.
+// DevicePropertyVisitor describes the specifics of accessing a particular device
+// property. Visitors are intended to be consumed by device mappers which connect to devices
+// and collect data / perform actions on the device.
+// A device may support multiple protocols. With visitorConfig,
+// users can define property access details per protocol per property for a device.
 type DevicePropertyVisitor struct {
 	// Required: The device property name to be accessed. This should refer to one of the
 	// device properties defined in the device model.
@@ -153,42 +157,44 @@ type DevicePropertyVisitor struct {
 	VisitorConfig `json:",inline"`
 }
 
-// Only one of its members may be specified.
+// At least one of its members must be specified.
 type VisitorConfig struct {
+	// Opcua represents a set of additional visitor config fields of opc-ua protocol.
 	// +optional
-	OpcUA  VisitorConfigOPCUA
+	OpcUA VisitorConfigOPCUA `json:"opcua,omitempty"`
+	// Modbus represents a set of additional visitor config fields of modbus protocol.
 	// +optional
-	Modbus VisitorConfigModbus
+	Modbus VisitorConfigModbus `json:"modbus,omitempty"`
 }
 
 // Common visitor configurations for opc-ua protocol
 type VisitorConfigOPCUA struct {
-	// Required: The Id of opc-ua node, e.g. "ns=1,i=1005"
-	NodeId string
+	// Required: The ID of opc-ua node, e.g. "ns=1,i=1005"
+	NodeID string `json:"nodeID,omitempty"`
 	// The name of opc-ua node
-	BrowseName string
+	BrowseName string `json:"browseName,omitempty"`
 }
 
 // Common visitor configurations for modbus protocol
 type VisitorConfigModbus struct {
 	// Required: Type of register
-	Register ModbusRegisterType
+	Register ModbusRegisterType `json:"register,omitempty"`
 	// Required: Offset indicates the starting register number to read/write data.
-	Offset int64
+	Offset int64 `json:"offset,omitempty"`
 	// Required: Limit number of registers to read/write.
-	Limit int64
-	// The scale
+	Limit int64 `json:"limit,omitempty"`
+	// The scale to convert raw property data into final units.
 	// Defaults to 1.0
 	// +optional
-	Scale float64
+	Scale float64 `json:"scale,omitempty"`
 	// Indicates whether the high and low byte swapped.
 	// Defaults to false.
 	// +optional
-	IsSwap bool
+	IsSwap bool `json:"isSwap,omitempty"`
 	// Indicates whether the high and low register swapped.
 	// Defaults to false.
 	// +optional
-	IsRegisterSwap bool
+	IsRegisterSwap bool `json:"isRegisterSwap,omitempty"`
 }
 
 type ModbusRegisterType string
