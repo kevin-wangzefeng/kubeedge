@@ -153,7 +153,7 @@ type DevicePropertyVisitor struct {
 	// Required: The device property name to be accessed. This should refer to one of the
 	// device properties defined in the device model.
 	PropertyName string `json:"propertyName,omitempty"`
-	// Required: Additional metadata about the how to access the device property.
+	// Required: Protocol relevant config details about the how to access the device property.
 	VisitorConfig `json:",inline"`
 }
 
