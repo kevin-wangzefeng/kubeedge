@@ -281,28 +281,74 @@ A `device` instance represents an actual device object. It is like an instantiat
 ```go
 // DeviceSpec represents a single device instance. It is an instantation of a device model.
 type DeviceSpec struct {
-  // Required: DeviceModelRef is reference to the device model used as a template
-  // to create the device instance.
-  DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
-  // Required: The protocol configuration used to connect to the device.
-  Protocol       Protocol                   `json:"protocol,omitempty"`
-  // The edge node name to which the device belongs.
-  // Defaults to empty string indicating the device is currently not bound to any edge node.
-  // +optional
-  NodeName       string                     `json:"nodeName,omitempty"`
+	// Required: DeviceModelRef is reference to the device model used as a template
+	// to create the device instance.
+	DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
+	// Required: The protocol configuration used to connect to the device.
+	Protocol ProtocolConfig `json:"protocol,omitempty"`
+	// The edge node name to which the device belongs.
+	// Defaults to empty string indicating the device is currently not bound to any edge node.
+	// +optional
+	NodeName string `json:"nodeName,omitempty"`
 }
 
-// Protocol contains the communication protocol details to connect to a device and read/write data.
-type Protocol struct {
-  // Required: The Protocol name. Since a device can support multiple protocols with different configurations,
-  // the protocol name is used for differentiation.
-  Name   string            `json:"name,omitempty"`
-  // Required: The Protocol type e.g. BLE, Modbus, OPC UA, ZigBee etc.
-  Type   ProtocolType      `json:"type,omitempty"`
-  // Additional protocol configuration like server url, number of slave nodes/ connections etc.
-  // This depends on the specific protocol.
-  // +optional
-  Config map[string]string `json:"config,omitempty"`
+// Only one of its members may be specified.
+type ProtocolConfig struct {
+	// Protocol configuration for opc-ua
+	// +optional
+	OpcUA *ProtocolConfigOpcUA
+	// Protocol configuration for modbus
+	// +optional
+	Modbus *ProtocolConfigModbus
+}
+
+type ProtocolConfigOpcUA struct {
+	// Required: The URL for opc server endpoint.
+	Url string `json: "url,omitempty"`
+	// Username for access opc server.
+	// +optional
+	UserName string `json: "userName,omitempty"`
+	// +optional
+	Password string `json: "password,omitempty"`
+	// +optional
+	SecurityPolicy string `json: "securityPolicy,omitempty"`
+	// +optional
+	SecurityMode string
+	// +optional
+	Certificate string
+	// +optional
+	PrivateKey string
+	// +optional
+	Timeout int64
+}
+
+// At least one of its members need to be specified.
+type ProtocolConfigModbus struct {
+	// +optional
+	RTU *ProtocolConfigModbusRTU `json: "rtu,omitempty"`
+	// +optional
+	TCP *ProtocolConfigModbusTCP `json: "tcp,omitempty"`
+}
+
+
+type ProtocolConfigModbusTCP struct {
+	IP      string `json: "ip,omitempty"`
+	Port    int64  `json: "port,omitempty"`
+	SlaveID string `json: "slaveID,omitempty"`
+}
+
+type ProtocolConfigModbusRTU struct {
+	SerialPort string `json: "serialPort,omitempty"`
+	//BaudRate 115200|57600|38400|19200|9600|4800|2400|1800|1200|600|300|200|150|134|110|75|50
+	BaudRate int64 `json: "baudRate,omitempty"`
+	// Valid values are 8, 7, 6, 5.
+	DataBits int64 `json: "dataBits,omitempty"`
+	// Valid options are "none", "even", "odd". Defaults to "none".
+	Parity   string `json: "parity,omitempty"`
+	// Bit that stops 1|2
+	StopBits int64 `json: "stopBits,omitempty"`
+	// 0-255
+	SlaveID  int64 `json: "slaveID,omitempty"`
 }
 
 // DeviceStatus reports the device state and the expected/actual values of twin attributes.
