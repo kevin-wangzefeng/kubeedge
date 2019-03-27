@@ -286,11 +286,10 @@ type DeviceSpec struct {
 	DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
 	// Required: The protocol configuration used to connect to the device.
 	Protocol ProtocolConfig `json:"protocol,omitempty"`
-
 	// NodeSelector indicates the binding preferences between devices and nodes.
 	// Refer to k8s.io/kubernetes/pkg/apis/core NodeSelector for more details
 	// +optional
-	NodeSelector *core.NodeSelector
+	NodeSelector *core.NodeSelector `json:"nodeSelector,omitempty"`
 }
 
 // Only one of its members may be specified.
@@ -378,7 +377,7 @@ type DeviceStatus struct {
 // the actual state to the cloud. Offline device interaction in the edge is possible via twin
 // properties for control/command operations.
 type Twin struct {
-	// Required: The property name for which the expected/actual values are reported.
+	// Required: The property name for which the desired/reported values are specified.
 	// This property should be present in the device model.
 	PropertyName string `json:"propertyName,omitempty"`
 	// Required: the expected attribute value for this property.
