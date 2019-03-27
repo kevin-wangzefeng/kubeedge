@@ -286,10 +286,11 @@ type DeviceSpec struct {
 	DeviceModelRef *core.LocalObjectReference `json:"deviceModelRef,omitempty"`
 	// Required: The protocol configuration used to connect to the device.
 	Protocol ProtocolConfig `json:"protocol,omitempty"`
-	// The edge node name to which the device belongs.
-	// Defaults to empty string indicating the device is currently not bound to any edge node.
+
+	// NodeSelector indicates the binding preferences between devices and nodes.
+	// Refer to k8s.io/kubernetes/pkg/apis/core NodeSelector for more details
 	// +optional
-	NodeName string `json:"nodeName,omitempty"`
+	NodeSelector *core.NodeSelector
 }
 
 // Only one of its members may be specified.
@@ -308,21 +309,27 @@ type ProtocolConfigOpcUA struct {
 	// Username for access opc server.
 	// +optional
 	UserName string `json: "userName,omitempty"`
+	// Password for access opc server.
 	// +optional
 	Password string `json: "password,omitempty"`
+	// Defaults to "none".
 	// +optional
 	SecurityPolicy string `json: "securityPolicy,omitempty"`
+	// Defaults to "none".
 	// +optional
-	SecurityMode string
+	SecurityMode string `json: "securityMode,omitempty"`
+	// Certificate for access opc server.
 	// +optional
-	Certificate string
+	Certificate string `json: "certificate,omitempty"`
+	// PrivateKey for access opc server.
 	// +optional
-	PrivateKey string
+	PrivateKey string `json: "privateKey,omitempty"`
+	// Timeout seconds for the opc server connection.???
 	// +optional
 	Timeout int64
 }
 
-// At least one of its members need to be specified.
+// Only one of its members may be specified.
 type ProtocolConfigModbus struct {
 	// +optional
 	RTU *ProtocolConfigModbusRTU `json: "rtu,omitempty"`
@@ -330,37 +337,37 @@ type ProtocolConfigModbus struct {
 	TCP *ProtocolConfigModbusTCP `json: "tcp,omitempty"`
 }
 
-
 type ProtocolConfigModbusTCP struct {
-	IP      string `json: "ip,omitempty"`
-	Port    int64  `json: "port,omitempty"`
+	// Required.
+	IP string `json: "ip,omitempty"`
+	// Required.
+	Port int64 `json: "port,omitempty"`
+	// Required.
 	SlaveID string `json: "slaveID,omitempty"`
 }
 
 type ProtocolConfigModbusRTU struct {
+
+	// Required.
 	SerialPort string `json: "serialPort,omitempty"`
-	//BaudRate 115200|57600|38400|19200|9600|4800|2400|1800|1200|600|300|200|150|134|110|75|50
+	// Required. BaudRate 115200|57600|38400|19200|9600|4800|2400|1800|1200|600|300|200|150|134|110|75|50
 	BaudRate int64 `json: "baudRate,omitempty"`
-	// Valid values are 8, 7, 6, 5.
+	// Required. Valid values are 8, 7, 6, 5.
 	DataBits int64 `json: "dataBits,omitempty"`
-	// Valid options are "none", "even", "odd". Defaults to "none".
-	Parity   string `json: "parity,omitempty"`
-	// Bit that stops 1|2
+	// Required. Valid options are "none", "even", "odd". Defaults to "none".
+	Parity string `json: "parity,omitempty"`
+	// Required. Bit that stops 1|2
 	StopBits int64 `json: "stopBits,omitempty"`
-	// 0-255
-	SlaveID  int64 `json: "slaveID,omitempty"`
+	// Required. 0-255
+	SlaveID int64 `json: "slaveID,omitempty"`
 }
 
 // DeviceStatus reports the device state and the expected/actual values of twin attributes.
 type DeviceStatus struct {
-  // The state of the device (e.g online, offline, unknown).
-  // Optional: Defaults to `unknown`.
-  // +optional
-  State string `json:"state,omitempty"`
-  // A list of device twins containing expected/actual states of control properties.
-  // Optional: A passive device won't have control attributes and this list could be empty.
-  // +optional
-  Twins []Twin `json:"twins,omitempty"`
+	// A list of device twins containing expected/actual states of control properties.
+	// Optional: A passive device won't have control attributes and this list could be empty.
+	// +optional
+	Twins []Twin `json:"twins,omitempty"`
 }
 
 // A Twin provides a logical representation of control attributes (writable properties in the
@@ -371,24 +378,24 @@ type DeviceStatus struct {
 // the actual state to the cloud. Offline device interaction in the edge is possible via twin
 // properties for control/command operations.
 type Twin struct {
-  // Required: The property name for which the expected/actual values are reported.
-  // This property should be present in the device model.
-  Name     string    `json:"name,omitempty"`
-  // Required: the expected attribute value for this property.
-  Expected Attribute `json:"expected,omitempty"`
-  // Required: the actual attribute value for this property.
-  Actual   Attribute `json:"actual,omitempty"`
+	// Required: The property name for which the expected/actual values are reported.
+	// This property should be present in the device model.
+	PropertyName string `json:"propertyName,omitempty"`
+	// Required: the expected attribute value for this property.
+	Desired Attribute `json:"desired,omitempty"`
+	// Required: the actual attribute value for this property.
+	Reported Attribute `json:"reported,omitempty"`
 }
 
 // Attribute represents the device property for which an Expected/Actual state can be defined.
 type Attribute struct {
-  // Required: Describes whether this property is optional or not.
-  Optional string            `json:"optional,omitempty"`
-  // Required: The value for this attribute.
-  Value    string            `json:"value,omitempty"`
-  // Additional metadata like timestamp when the value was reported etc.
-  // +optional
-  Metadata map[string]string `json:"metadata,omitempty"`
+	// Required: Describes whether this property is optional or not.
+	Optional string `json:"optional,omitempty"`
+	// Required: The value for this attribute.
+	Value string `json:"value,omitempty"`
+	// Additional metadata like timestamp when the value was reported etc.
+	// +optional
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // +genclient
