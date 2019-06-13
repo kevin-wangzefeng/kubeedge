@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"k8s.io/kubernetes/pkg/kubelet/gpu"
 	"k8s.io/kubernetes/pkg/kubelet/gpu/nvidia"
 	"k8s.io/kubernetes/pkg/kubelet/images"
@@ -111,6 +112,7 @@ type edged struct {
 	hostname                  string
 	namespace                 string
 	nodeName                  string
+	interfaceName             string
 	uid                       types.UID
 	nodeStatusUpdateFrequency time.Duration
 	registrationCompleted     bool
@@ -161,6 +163,7 @@ type Config struct {
 	nodeName                 string
 	nodeNamespace            string
 	interfaceName            string
+	memoryCapacity           int
 	nodeStatusUpdateInterval time.Duration
 	devicePluginEnabled      bool
 	gpuPluginEnabled         bool
@@ -205,8 +208,6 @@ func (e *edged) Start(c *context.Context) {
 		log.LOGGER.Errorf("create pod dir [%s] failed: %v", e.getPodsDir(), err)
 		return
 	}
-	//e.metaClient = metaclient.New(c)
-	//e.statusManager = status.NewManager(e.kubeClient, e.podManager, utilpod.NewPodDeleteSafety(), e.metaClient)
 	switch e.containerRuntimeName {
 	case DockerContainerRuntime:
 		e.volumeManager = volumemanager.NewVolumeManager(
@@ -250,8 +251,7 @@ func (e *edged) Start(c *context.Context) {
 	case DockerContainerRuntime:
 		e.pleg = edgepleg.NewGenericLifecycle(e.runtime.(*dockertools.DockerManager).ContainerManager, e.probeManager, plegChannelCapacity, plegRelistPeriod, e.podManager, e.statusManager)
 	case RemoteContainerRuntime:
-		e.pleg = edgepleg.NewGenericLifecycleRemote(e.containerRuntime, e.probeManager, plegChannelCapacity, plegRelistPeriod,e.podManager, e.statusManager, e.podCache, clock.RealClock{})
-		//e.pleg = pleg.NewGenericPLEG(e.containerRuntime, plegChannelCapacity, plegRelistPeriod, e.podCache, clock.RealClock{})
+		e.pleg = edgepleg.NewGenericLifecycleRemote(e.containerRuntime, e.probeManager, plegChannelCapacity, plegRelistPeriod,e.podManager, e.statusManager, e.podCache, clock.RealClock{}, e.interfaceName)
 	default:
 		log.LOGGER.Errorf("Unsupported CRI runtime: %q", e.containerRuntimeName)
 		return
@@ -300,6 +300,7 @@ func getConfig() *Config {
 	conf.nodeName = config.CONFIG.GetConfigurationByKey("edged.hostname-override").(string)
 	conf.nodeNamespace = config.CONFIG.GetConfigurationByKey("edged.register-node-namespace").(string)
 	conf.interfaceName = config.CONFIG.GetConfigurationByKey("edged.interface-name").(string)
+	conf.memoryCapacity = config.CONFIG.GetConfigurationByKey("edged.memory-capacity").(int)
 	nodeStatusUpdateInterval := config.CONFIG.GetConfigurationByKey("edged.node-status-update-frequency").(int)
 	conf.nodeStatusUpdateInterval = time.Duration(nodeStatusUpdateInterval) * time.Second
 	conf.devicePluginEnabled = config.CONFIG.GetConfigurationByKey("edged.device-plugin-enabled").(bool)
@@ -350,6 +351,7 @@ func newEdged() (*edged, error) {
 
 	ed := &edged{
 		nodeName:                  conf.nodeName,
+		interfaceName:             conf.interfaceName,
 		namespace:                 conf.nodeNamespace,
 		gpuPluginEnabled:          conf.gpuPluginEnabled,
 		podManager:                podManager,
@@ -432,12 +434,14 @@ func newEdged() (*edged, error) {
 			ed.os = kubecontainer.RealOS{}
 		}
 		ed.clcm, err = clcm.NewContainerLifecycleManager()
+		var machineInfo cadvisorapi.MachineInfo
+		machineInfo.MemoryCapacity = uint64(conf.memoryCapacity)
 		containerRuntime, err := kuberuntime.NewKubeGenericRuntimeManager(
 			recorder,
 			ed.livenessManager,
 			"",
 			containerRefManager,
-			nil,
+			&machineInfo,
 			ed,
 			ed.os,
 			ed,
@@ -731,32 +735,6 @@ func (e *edged) consumePodAddition(namespacedName *types.NamespacedName) error {
 		if err != nil {
 			log.LOGGER.Errorf("Pod status for %s from cache failed: %v", podName, err)
 		}
-		/*if err != nil {
-		    var curPodStatus kubecontainer.PodStatus
-			podStatus, ok := e.statusManager.GetPodStatus(pod.GetUID())
-			if ok {
-				curPodStatus.Namespace = namespacedName.Namespace
-				curPodStatus.ID = pod.GetUID()
-				curPodStatus.Name = podName
-				curPodStatus.IP = pod.Status.PodIP
-				for _, status := range podStatus.ContainerStatuses {
-					var cstatus kubecontainer.ContainerStatus
-					cstatus.ID.ID = status.ContainerID
-					cstatus.ID.Type = string(kubecontainer.ContainerTypeRegular)
-					cstatus.Name = status.Name
-					cstatus.Image = status.Image
-					cstatus.ImageID = status.ImageID
-					cstatus.RestartCount = int(status.RestartCount)
-					curPodStatus.ContainerStatuses = append(curPodStatus.ContainerStatuses, &cstatus)
-				}
-			}
-		}*/
-
-		/*statusRequest, err := e.metaClient.PodStatus(namespacedName.Namespace).Get(podName)
-		if err != nil {
-			return fmt.Errorf("consume added pod [%s] pod status request failed, %v", podName, err)
-		}
-		desiredPodStatus := statusRequest.Status*/
 
         desiredPodStatus, _ := e.statusManager.GetPodStatus(pod.GetUID())
 		log.LOGGER.Errorf("Syncing pod to  cur status [%s]\n", curPodStatus)
