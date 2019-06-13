@@ -8,14 +8,13 @@ import (
 )
 
 const (
-PolicyNone = "none"
-kubeletRootDir = "/home/root1/"
-reconcilePeriod = 1 * time.Second
+	PolicyNone      = "none"
+	kubeletRootDir  = "/home/root1/"
+	reconcilePeriod = 1 * time.Second
 )
 
 type containerLifecycleManagerImpl struct {
 	cpuManager cpumanager.Manager
-
 }
 
 var _ ContainerLifecycleManager = &containerLifecycleManagerImpl{}
@@ -41,4 +40,3 @@ func NewContainerLifecycleManager() (ContainerLifecycleManager, error) {
 func (clcm *containerLifecycleManagerImpl) InternalContainerLifecycle() InternalContainerLifecycle {
 	return &internalContainerLifecycleImpl{clcm.cpuManager}
 }
-

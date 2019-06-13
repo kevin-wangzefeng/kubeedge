@@ -242,7 +242,6 @@ func (e *edged) getNodeInfo() (v1.NodeSystemInfo, error) {
 	default:
 	}
 
-
 	nodeInfo.KernelVersion = kernel
 	nodeInfo.OperatingSystem = runtime.GOOS
 	nodeInfo.Architecture = runtime.GOARCH
@@ -360,7 +359,7 @@ func (e *edged) getDevicePluginResourceCapacity() (v1.ResourceList, []string) {
 		//return resourceList, str
 	default:
 	}
-	return nil,nil
+	return nil, nil
 }
 
 func (e *edged) getNodePhase() v1.NodePhase {

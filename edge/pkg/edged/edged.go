@@ -3,7 +3,6 @@ package edged
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"github.com/golang/glog"
 	"github.com/kubeedge/kubeedge/edge/pkg/common/modules"
 	"github.com/kubeedge/kubeedge/edge/pkg/edged/clcm"
@@ -12,9 +11,11 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/remote"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
+	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
-	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"k8s.io/kubernetes/pkg/kubelet/gpu"
 	"k8s.io/kubernetes/pkg/kubelet/gpu/nvidia"
 	"k8s.io/kubernetes/pkg/kubelet/images"
@@ -91,7 +91,7 @@ const (
 	DefaultRootDir                   = "/var/lib/edged"
 	workerResyncIntervalJitterFactor = 0.5
 	//EdgeController gives controller name
-	EdgeController = "controller"
+	EdgeController         = "controller"
 	DockerContainerRuntime = "docker"
 	RemoteContainerRuntime = "remote"
 )
@@ -99,6 +99,7 @@ const (
 var (
 	zeroDuration = metav1.Duration{}
 )
+
 // podReady holds the initPodReady flag and its lock
 type podReady struct {
 	// initPodReady is flag to check Pod ready status
@@ -122,41 +123,41 @@ type edged struct {
 	// Mutex is used to protect this value
 	// runtimeState              *runtimeState
 	// updateRuntimeMux          sync.Mutex
-	containerRuntimeName      string
+	containerRuntimeName string
 	// container runtime
-	containerRuntime          kubecontainer.Runtime
-	podCache                  kubecontainer.Cache
-	os                        kubecontainer.OSInterface
-	runtimeService            internalapi.RuntimeService
-	podManager                podmanager.Manager
-	pleg                      pleg.PodLifecycleEventGenerator
-	statusManager             kubestatus.Manager
-	kubeClient                clientset.Interface
-	probeManager              prober.Manager
-	livenessManager           proberesults.Manager
-	server                    *server.Server
-	podAdditionQueue          *workqueue.Type
-	podAdditionBackoff        *flowcontrol.Backoff
-	podDeletionQueue          *workqueue.Type
-	podDeletionBackoff        *flowcontrol.Backoff
-	imageGCManager            images.ImageGCManager
-	containerGCManager        kubecontainer.ContainerGC
-	gpuManager                gpu.GPUManager
-	metaClient                metaclient.CoreInterface
-	volumePluginMgr           *volume.VolumePluginMgr
-	mounter                   mount.Interface
-	writer                    kubeio.Writer
-	volumeManager             volumemanager.VolumeManager
-	rootDirectory             string
-	gpuPluginEnabled          bool
-	version                   string
+	containerRuntime   kubecontainer.Runtime
+	podCache           kubecontainer.Cache
+	os                 kubecontainer.OSInterface
+	runtimeService     internalapi.RuntimeService
+	podManager         podmanager.Manager
+	pleg               pleg.PodLifecycleEventGenerator
+	statusManager      kubestatus.Manager
+	kubeClient         clientset.Interface
+	probeManager       prober.Manager
+	livenessManager    proberesults.Manager
+	server             *server.Server
+	podAdditionQueue   *workqueue.Type
+	podAdditionBackoff *flowcontrol.Backoff
+	podDeletionQueue   *workqueue.Type
+	podDeletionBackoff *flowcontrol.Backoff
+	imageGCManager     images.ImageGCManager
+	containerGCManager kubecontainer.ContainerGC
+	gpuManager         gpu.GPUManager
+	metaClient         metaclient.CoreInterface
+	volumePluginMgr    *volume.VolumePluginMgr
+	mounter            mount.Interface
+	writer             kubeio.Writer
+	volumeManager      volumemanager.VolumeManager
+	rootDirectory      string
+	gpuPluginEnabled   bool
+	version            string
 	// podReady is structure with initPodReady flag and its lock
 	podReady
 	// cache for secret
 	secretStore    cache.Store
 	configMapStore cache.Store
 	workQueue      queue.WorkQueue
-	clcm clcm.ContainerLifecycleManager
+	clcm           clcm.ContainerLifecycleManager
 }
 
 //Config defines configuration details
@@ -253,7 +254,7 @@ func (e *edged) Start(c *context.Context) {
 	case DockerContainerRuntime:
 		e.pleg = edgepleg.NewGenericLifecycle(e.runtime.(*dockertools.DockerManager).ContainerManager, e.probeManager, plegChannelCapacity, plegRelistPeriod, e.podManager, e.statusManager)
 	case RemoteContainerRuntime:
-		e.pleg = edgepleg.NewGenericLifecycleRemote(e.containerRuntime, e.probeManager, plegChannelCapacity, plegRelistPeriod,e.podManager, e.statusManager, e.podCache, clock.RealClock{}, e.interfaceName)
+		e.pleg = edgepleg.NewGenericLifecycleRemote(e.containerRuntime, e.probeManager, plegChannelCapacity, plegRelistPeriod, e.podManager, e.statusManager, e.podCache, clock.RealClock{}, e.interfaceName)
 	default:
 		log.LOGGER.Errorf("Unsupported CRI runtime: %q", e.containerRuntimeName)
 		return
@@ -335,7 +336,6 @@ func getRuntimeAndImageServices(remoteRuntimeEndpoint string, remoteImageEndpoin
 	}
 	return rs, is, err
 }
-
 
 //newEdged creates new edged object and initialises it
 func newEdged() (*edged, error) {
@@ -421,7 +421,7 @@ func newEdged() (*edged, error) {
 			return nil, fmt.Errorf("init Container GC Manager failed with error %s", err.Error())
 		}
 		ed.server = server.NewServer(ed.podManager)
-		ed.volumePluginMgr, err =  NewInitializedVolumePluginMgr(ed, ProbeVolumePlugins(""))
+		ed.volumePluginMgr, err = NewInitializedVolumePluginMgr(ed, ProbeVolumePlugins(""))
 		if err != nil {
 			return nil, fmt.Errorf("init VolumePluginMgr failed with error %s", err.Error())
 		}
@@ -483,7 +483,7 @@ func newEdged() (*edged, error) {
 		}
 		ed.containerGCManager = containerGCManager
 		ed.server = server.NewServer(ed.podManager)
-		ed.volumePluginMgr, err =  NewInitializedVolumePluginMgr(ed, ProbeVolumePlugins(""))
+		ed.volumePluginMgr, err = NewInitializedVolumePluginMgr(ed, ProbeVolumePlugins(""))
 		if err != nil {
 			return nil, fmt.Errorf("init VolumePluginMgr failed with error %s", err.Error())
 		}
@@ -491,7 +491,6 @@ func newEdged() (*edged, error) {
 	default:
 		return nil, fmt.Errorf("unsupported runtime %q", conf.runtimeType)
 	}
-
 
 	return ed, nil
 }
@@ -744,7 +743,7 @@ func (e *edged) consumePodAddition(namespacedName *types.NamespacedName) error {
 			log.LOGGER.Errorf("Pod status for %s from cache failed: %v", podName, err)
 		}
 
-        desiredPodStatus, _ := e.statusManager.GetPodStatus(pod.GetUID())
+		desiredPodStatus, _ := e.statusManager.GetPodStatus(pod.GetUID())
 		log.LOGGER.Errorf("Syncing pod to  cur status [%s]\n", curPodStatus)
 		result := e.containerRuntime.SyncPod(pod, desiredPodStatus, curPodStatus, secrets, e.podAdditionBackoff)
 		if err := result.Error(); err != nil {
@@ -796,7 +795,7 @@ func (e *edged) consumePodDeletion(namespacedName *types.NamespacedName) error {
 		}
 	case RemoteContainerRuntime:
 		podStatus, err := e.podCache.Get(pod.GetUID())
-		err = e.containerRuntime.KillPod(pod, kubecontainer.ConvertPodStatusToRunningPod(e.containerRuntimeName, podStatus),nil)
+		err = e.containerRuntime.KillPod(pod, kubecontainer.ConvertPodStatusToRunningPod(e.containerRuntimeName, podStatus), nil)
 		if err != nil {
 			if err == apis.ErrContainerNotFound {
 				return err
@@ -1131,4 +1130,3 @@ func (e *edged) HandlePodCleanups() error {
 
 	return nil
 }
-

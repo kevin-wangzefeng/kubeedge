@@ -14,8 +14,8 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
-	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/pleg"
 	"k8s.io/kubernetes/pkg/kubelet/prober"
 	"k8s.io/kubernetes/pkg/kubelet/status"
@@ -28,15 +28,15 @@ import (
 //GenericLifecycle is object for pleg lifecycle
 type GenericLifecycle struct {
 	pleg.GenericPLEG
-	runtime      containers.ContainerManager
-	relistPeriod time.Duration
-	status       status.Manager
-	podManager   podmanager.Manager
-	probeManager prober.Manager
-	podCache     kubecontainer.Cache
+	runtime       containers.ContainerManager
+	relistPeriod  time.Duration
+	status        status.Manager
+	podManager    podmanager.Manager
+	probeManager  prober.Manager
+	podCache      kubecontainer.Cache
 	remoteRuntime kubecontainer.Runtime
 	interfaceName string
-	clock clock.Clock
+	clock         clock.Clock
 }
 
 //NewGenericLifecycle creates new generic life cycle object
@@ -45,36 +45,34 @@ func NewGenericLifecycle(manager containers.ContainerManager, probeManager probe
 	kubeContainerManager := containers.NewKubeContainerRuntime(manager)
 	genericPLEG := pleg.NewGenericPLEG(kubeContainerManager, channelCapacity, relistPeriod, nil, clock.RealClock{})
 	return &GenericLifecycle{
-		GenericPLEG:  *genericPLEG.(*pleg.GenericPLEG),
-		relistPeriod: relistPeriod,
-		runtime:      manager,
-		status:       statusManager,
-		podCache: nil,
-		podManager:   podManager,
-		probeManager: probeManager,
+		GenericPLEG:   *genericPLEG.(*pleg.GenericPLEG),
+		relistPeriod:  relistPeriod,
+		runtime:       manager,
+		status:        statusManager,
+		podCache:      nil,
+		podManager:    podManager,
+		probeManager:  probeManager,
 		remoteRuntime: nil,
-		clock: clock.RealClock{},
+		clock:         clock.RealClock{},
 	}
-}//NewGenericLifecycle creates new generic life cycle object
+} //NewGenericLifecycle creates new generic life cycle object
 func NewGenericLifecycleRemote(runtime kubecontainer.Runtime, probeManager prober.Manager, channelCapacity int,
 	relistPeriod time.Duration, podManager podmanager.Manager, statusManager status.Manager, podCache kubecontainer.Cache, clock clock.Clock, iface string) pleg.PodLifecycleEventGenerator {
 	//kubeContainerManager := containers.NewKubeContainerRuntime(manager)
 	genericPLEG := pleg.NewGenericPLEG(runtime, channelCapacity, relistPeriod, podCache, clock)
 	return &GenericLifecycle{
-		GenericPLEG:  	*genericPLEG.(*pleg.GenericPLEG),
-		relistPeriod: 	relistPeriod,
-		remoteRuntime:  runtime,
-		status:       	statusManager,
-		podCache: 		podCache,
-		podManager:   	podManager,
-		probeManager: 	probeManager,
-		interfaceName:  iface,
-		runtime: 		nil,
-		clock: 			clock,
+		GenericPLEG:   *genericPLEG.(*pleg.GenericPLEG),
+		relistPeriod:  relistPeriod,
+		remoteRuntime: runtime,
+		status:        statusManager,
+		podCache:      podCache,
+		podManager:    podManager,
+		probeManager:  probeManager,
+		interfaceName: iface,
+		runtime:       nil,
+		clock:         clock,
 	}
 }
-
-
 
 // Start spawns a goroutine to relist periodically.
 func (gl *GenericLifecycle) Start() {
@@ -99,7 +97,7 @@ func (gl *GenericLifecycle) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kub
 	hostIP, err := gl.getHostIPByInterface()
 	if err != nil {
 		log.LOGGER.Errorf("Unable to get host IP")
-	}else {
+	} else {
 		apiPodStatus.HostIP = hostIP
 		if pod.Spec.HostNetwork && podStatus.IP == "" {
 			apiPodStatus.PodIP = hostIP
@@ -263,7 +261,6 @@ func (gl *GenericLifecycle) convertToAPIContainerStatuses(pod *v1.Pod, podStatus
 	}
 	return containerStatuses
 }
-
 
 func (gl *GenericLifecycle) updatePodStatus(pod *v1.Pod) error {
 	var podStatus *v1.PodStatus
@@ -429,12 +426,11 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	}
 }
 
-
 func (gl *GenericLifecycle) GetPodStatus(pod *v1.Pod) (v1.PodStatus, bool) {
 	return gl.status.GetPodStatus(pod.UID)
 }
 
-func  GetRemotePodStatus (gl *GenericLifecycle, podUID types.UID) (*kubecontainer.PodStatus, error) {
+func GetRemotePodStatus(gl *GenericLifecycle, podUID types.UID) (*kubecontainer.PodStatus, error) {
 	return gl.podCache.Get(podUID)
 }
 

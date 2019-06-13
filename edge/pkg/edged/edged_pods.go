@@ -533,7 +533,6 @@ func (e *edged) removeOrphanedPodStatuses(pods []*v1.Pod) {
 	e.statusManager.RemoveOrphanedStatuses(podUIDs)
 }
 
-
 // GetPodCgroupParent gets pod cgroup parent from container manager.
 func (e *edged) GetPodCgroupParent(pod *v1.Pod) string {
 	/*pcm := e.containerManager.NewPodContainerManager()
@@ -541,7 +540,6 @@ func (e *edged) GetPodCgroupParent(pod *v1.Pod) string {
 	return cgroupParent*/
 	return "systemd"
 }
-
 
 // GenerateRunContainerOptions generates the RunContainerOptions, which can be used by
 // the container runtime to set parameters for launching a container.
@@ -551,7 +549,6 @@ func (e *edged) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container
 		return nil, nil, err
 	}*/
 	opts := kubecontainer.RunContainerOptions{}
-
 
 	hostname, hostDomainName, err := e.GeneratePodHostNameAndDomain(pod)
 	if err != nil {
@@ -598,14 +595,14 @@ func (e *edged) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container
 
 	return &opts, nil, nil
 }
+
 // GetPodDNS returns DNS settings for the pod.
 // This function is defined in kubecontainer.RuntimeHelper interface so we
 // have to implement it.
 func (e *edged) GetPodDNS(pod *v1.Pod) (*runtimeapi.DNSConfig, error) {
-	dnsConfig := &runtimeapi.DNSConfig{Servers:[]string{"",},}
+	dnsConfig := &runtimeapi.DNSConfig{Servers: []string{""}}
 	return dnsConfig, nil
 }
-
 
 // Make the environment variables for a pod in the given namespace.
 /*func (e *edged) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container, podIP string) ([]kubecontainer.EnvVar, error) {
