@@ -602,7 +602,7 @@ func (e *edged) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container
 // This function is defined in kubecontainer.RuntimeHelper interface so we
 // have to implement it.
 func (e *edged) GetPodDNS(pod *v1.Pod) (*runtimeapi.DNSConfig, error) {
-	dnsConfig := &runtimeapi.DNSConfig{Servers:[]string{"100.64.40.1",},}
+	dnsConfig := &runtimeapi.DNSConfig{Servers:[]string{"",},}
 	return dnsConfig, nil
 }
 

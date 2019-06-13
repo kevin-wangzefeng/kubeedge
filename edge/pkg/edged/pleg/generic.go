@@ -1,10 +1,13 @@
 package pleg
 
 import (
+	"fmt"
+	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"net"
 	"sort"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/kubelet/pleg"
 	"k8s.io/kubernetes/pkg/kubelet/prober"
 	"k8s.io/kubernetes/pkg/kubelet/status"
@@ -31,6 +35,7 @@ type GenericLifecycle struct {
 	probeManager prober.Manager
 	podCache     kubecontainer.Cache
 	remoteRuntime kubecontainer.Runtime
+	interfaceName string
 	clock clock.Clock
 }
 
@@ -52,7 +57,7 @@ func NewGenericLifecycle(manager containers.ContainerManager, probeManager probe
 	}
 }//NewGenericLifecycle creates new generic life cycle object
 func NewGenericLifecycleRemote(runtime kubecontainer.Runtime, probeManager prober.Manager, channelCapacity int,
-	relistPeriod time.Duration, podManager podmanager.Manager, statusManager status.Manager, podCache kubecontainer.Cache, clock clock.Clock) pleg.PodLifecycleEventGenerator {
+	relistPeriod time.Duration, podManager podmanager.Manager, statusManager status.Manager, podCache kubecontainer.Cache, clock clock.Clock, iface string) pleg.PodLifecycleEventGenerator {
 	//kubeContainerManager := containers.NewKubeContainerRuntime(manager)
 	genericPLEG := pleg.NewGenericPLEG(runtime, channelCapacity, relistPeriod, podCache, clock)
 	return &GenericLifecycle{
@@ -63,6 +68,7 @@ func NewGenericLifecycleRemote(runtime kubecontainer.Runtime, probeManager probe
 		podCache: 		podCache,
 		podManager:   	podManager,
 		probeManager: 	probeManager,
+		interfaceName:  iface,
 		runtime: 		nil,
 		clock: 			clock,
 	}
@@ -89,7 +95,18 @@ func (gl *GenericLifecycle) Start() {
 // alter the kubelet state at all.
 func (gl *GenericLifecycle) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontainer.PodStatus) *v1.PodStatus {
 	var apiPodStatus v1.PodStatus
-	apiPodStatus.PodIP = podStatus.IP
+
+	hostIP, err := gl.getHostIPByInterface()
+	if err != nil {
+		log.LOGGER.Errorf("Unable to get host IP")
+	}else {
+		apiPodStatus.HostIP = hostIP
+		if pod.Spec.HostNetwork && podStatus.IP == "" {
+			apiPodStatus.PodIP = hostIP
+		} else {
+			apiPodStatus.PodIP = podStatus.IP
+		}
+	}
 	// set status for Pods created on versions of kube older than 1.6
 	apiPodStatus.QOSClass = v1qos.GetPodQOS(pod)
 
@@ -114,11 +131,6 @@ func (gl *GenericLifecycle) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kub
 	)
 
 	// Preserves conditions not controlled by kubelet
-	for _, c := range pod.Status.Conditions {
-		//if !kubetypes.PodConditionByKubelet(c.Type) {
-			apiPodStatus.Conditions = append(apiPodStatus.Conditions, c)
-		//}
-	}
 	return &apiPodStatus
 }
 
@@ -137,6 +149,7 @@ func (gl *GenericLifecycle) convertToAPIContainerStatuses(pod *v1.Pod, podStatus
 		switch cs.State {
 		case kubecontainer.ContainerStateRunning:
 			cstatus.State.Running = &v1.ContainerStateRunning{StartedAt: metav1.NewTime(cs.StartedAt)}
+			cstatus.Ready = true
 		case kubecontainer.ContainerStateCreated:
 			// Treat containers in the "created" state as if they are exited.
 			// The pod workers are supposed start all containers it creates in
@@ -230,25 +243,9 @@ func (gl *GenericLifecycle) convertToAPIContainerStatuses(pod *v1.Pod, podStatus
 			continue
 		}
 		cstatus := statuses[container.Name]
-		/*reason, ok := kl.reasonCache.Get(pod.UID, container.Name)
-		if !ok {
-			// In fact, we could also apply Waiting state here, but it is less informative,
-			// and the container will be restarted soon, so we prefer the original state here.
-			// Note that with the current implementation of ShouldContainerBeRestarted the original state here
-			// could be:
-			//   * Waiting: There is no associated historical container and start failure reason record.
-			//   * Terminated: The container is terminated.
-			continue
-		}*/
 		if cstatus.State.Terminated != nil {
 			cstatus.LastTerminationState = cstatus.State
 		}
-		/*cstatus.State = v1.ContainerState{
-			Waiting: &v1.ContainerStateWaiting{
-				Reason:  reason.Err.Error(),
-				Message: reason.Message,
-			},
-		}*/
 		statuses[container.Name] = cstatus
 	}
 
@@ -272,7 +269,6 @@ func (gl *GenericLifecycle) updatePodStatus(pod *v1.Pod) error {
 	var podStatus *v1.PodStatus
 	var newStatus v1.PodStatus
 	var podStatusRemote *kubecontainer.PodStatus
-	//var newStatusRemote kubecontainer.PodStatus
 	var err error
 	if gl.runtime != nil {
 		podStatus, err = gl.runtime.GetPodStatusOwn(pod)
@@ -280,24 +276,24 @@ func (gl *GenericLifecycle) updatePodStatus(pod *v1.Pod) error {
 	}
 	if gl.remoteRuntime != nil {
 		podStatusRemote, err = gl.remoteRuntime.GetPodStatus(pod.UID, pod.Name, pod.Namespace)
-		/*if err != nil {
+		if err != nil {
 			glog.Errorf("Unable to get runtime pod status for pod %s", pod.Name)
 			return err
-		}*/
-		//glog.Errorf("Pod status for pod %s is [%s]", pod.Name, podStatusRemote)
-		/*newStatusRemote.Name = podStatusRemote.Name
-		newStatusRemote.Namespace = podStatusRemote.Namespace
-		newStatusRemote.ID = podStatusRemote.ID
-		newStatusRemote.IP = podStatusRemote.IP
-		for _, cstatus := range podStatusRemote.ContainerStatuses {
-			newStatusRemote.ContainerStatuses = append(newStatusRemote.ContainerStatuses,cstatus)
 		}
-		for _, sstatus := range podStatusRemote.SandboxStatuses {
-			newStatusRemote.SandboxStatuses = append(newStatusRemote.SandboxStatuses,sstatus)
-		}
-		timestamp := gl.clock.Now()
-		gl.podCache.Set(pod.UID, &newStatusRemote, err, timestamp)*/
 		podStatus = gl.convertStatusToAPIStatus(pod, podStatusRemote)
+		// Assume info is ready to process
+		spec := &pod.Spec
+		allStatus := append(append([]v1.ContainerStatus{}, podStatus.ContainerStatuses...), podStatus.InitContainerStatuses...)
+		podStatus.Phase = getPhase(spec, allStatus)
+		// Check for illegal phase transition
+		if pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded {
+			// API server shows terminal phase; transitions are not allowed
+			if podStatus.Phase != pod.Status.Phase {
+				glog.Errorf("Pod attempted illegal phase transition from %s to %s: %v", pod.Status.Phase, podStatus.Phase, podStatus)
+				// Force back to phase from the API server
+				podStatus.Phase = pod.Status.Phase
+			}
+		}
 	}
 	if err != nil {
 		return err
@@ -309,12 +305,130 @@ func (gl *GenericLifecycle) updatePodStatus(pod *v1.Pod) error {
 		newStatus.Conditions = append(newStatus.Conditions, gl.runtime.GeneratePodReadyCondition(newStatus.ContainerStatuses))
 	}
 	if gl.remoteRuntime != nil {
-		newStatus.Conditions = append(newStatus.Conditions, status.GeneratePodReadyCondition(&pod.Spec, newStatus.ContainerStatuses, pod.Status.Phase))
+		spec := &pod.Spec
+		newStatus.Conditions = append(newStatus.Conditions, status.GeneratePodInitializedCondition(spec, newStatus.InitContainerStatuses, newStatus.Phase))
+		newStatus.Conditions = append(newStatus.Conditions, status.GeneratePodReadyCondition(spec, newStatus.ContainerStatuses, newStatus.Phase))
+		//newStatus.Conditions = append(newStatus.Conditions, status.GenerateContainersReadyCondition(spec, newStatus.ContainerStatuses, newStatus.Phase))
+		newStatus.Conditions = append(newStatus.Conditions, v1.PodCondition{
+			Type:   v1.PodScheduled,
+			Status: v1.ConditionTrue,
+		})
 	}
 	pod.Status = newStatus
 	gl.status.SetPodStatus(pod, newStatus)
 	return err
 }
+
+// getPhase returns the phase of a pod given its container info.
+func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
+	initialized := 0
+	pendingInitialization := 0
+	failedInitialization := 0
+	for _, container := range spec.InitContainers {
+		containerStatus, ok := podutil.GetContainerStatus(info, container.Name)
+		if !ok {
+			pendingInitialization++
+			continue
+		}
+
+		switch {
+		case containerStatus.State.Running != nil:
+			pendingInitialization++
+		case containerStatus.State.Terminated != nil:
+			if containerStatus.State.Terminated.ExitCode == 0 {
+				initialized++
+			} else {
+				failedInitialization++
+			}
+		case containerStatus.State.Waiting != nil:
+			if containerStatus.LastTerminationState.Terminated != nil {
+				if containerStatus.LastTerminationState.Terminated.ExitCode == 0 {
+					initialized++
+				} else {
+					failedInitialization++
+				}
+			} else {
+				pendingInitialization++
+			}
+		default:
+			pendingInitialization++
+		}
+	}
+
+	unknown := 0
+	running := 0
+	waiting := 0
+	stopped := 0
+	failed := 0
+	succeeded := 0
+	for _, container := range spec.Containers {
+		containerStatus, ok := podutil.GetContainerStatus(info, container.Name)
+		if !ok {
+			unknown++
+			continue
+		}
+
+		switch {
+		case containerStatus.State.Running != nil:
+			running++
+		case containerStatus.State.Terminated != nil:
+			stopped++
+			if containerStatus.State.Terminated.ExitCode == 0 {
+				succeeded++
+			} else {
+				failed++
+			}
+		case containerStatus.State.Waiting != nil:
+			if containerStatus.LastTerminationState.Terminated != nil {
+				stopped++
+			} else {
+				waiting++
+			}
+		default:
+			unknown++
+		}
+	}
+
+	if failedInitialization > 0 && spec.RestartPolicy == v1.RestartPolicyNever {
+		return v1.PodFailed
+	}
+
+	switch {
+	case pendingInitialization > 0:
+		fallthrough
+	case waiting > 0:
+		glog.Infof("pod waiting > 0, pending")
+		// One or more containers has not been started
+		return v1.PodPending
+	case running > 0 && unknown == 0:
+		// All containers have been started, and at least
+		// one container is running
+		return v1.PodRunning
+	case running == 0 && stopped > 0 && unknown == 0:
+		// All containers are terminated
+		if spec.RestartPolicy == v1.RestartPolicyAlways {
+			// All containers are in the process of restarting
+			return v1.PodRunning
+		}
+		if stopped == succeeded {
+			// RestartPolicy is not Always, and all
+			// containers are terminated in success
+			return v1.PodSucceeded
+		}
+		if spec.RestartPolicy == v1.RestartPolicyNever {
+			// RestartPolicy is Never, and all containers are
+			// terminated with at least one in failure
+			return v1.PodFailed
+		}
+		// RestartPolicy is OnFailure, and at least one in failure
+		// and in the process of restarting
+		return v1.PodRunning
+	default:
+		glog.Infof("pod default case, pending")
+		return v1.PodPending
+	}
+}
+
 
 func (gl *GenericLifecycle) GetPodStatus(pod *v1.Pod) (v1.PodStatus, bool) {
 	return gl.status.GetPodStatus(pod.UID)
@@ -322,4 +436,29 @@ func (gl *GenericLifecycle) GetPodStatus(pod *v1.Pod) (v1.PodStatus, bool) {
 
 func  GetRemotePodStatus (gl *GenericLifecycle, podUID types.UID) (*kubecontainer.PodStatus, error) {
 	return gl.podCache.Get(podUID)
+}
+
+func (gl *GenericLifecycle) getHostIPByInterface() (string, error) {
+	iface, err := net.InterfaceByName(gl.interfaceName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get network interface: %v err:%v", gl.interfaceName, err)
+	}
+	if iface == nil {
+		return "", fmt.Errorf("input iface is nil")
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return "", err
+	}
+	for _, addr := range addrs {
+		ip, _, err := net.ParseCIDR(addr.String())
+		if err != nil {
+			continue
+		}
+		if ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no ip and mask in this network card")
 }
