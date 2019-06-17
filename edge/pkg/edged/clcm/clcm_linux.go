@@ -8,8 +8,8 @@ import (
 )
 
 const (
+	//PolicyNone define no policy
 	PolicyNone      = "none"
-	kubeletRootDir  = "/home/root1/"
 	reconcilePeriod = 1 * time.Second
 )
 
@@ -19,7 +19,8 @@ type containerLifecycleManagerImpl struct {
 
 var _ ContainerLifecycleManager = &containerLifecycleManagerImpl{}
 
-func NewContainerLifecycleManager() (ContainerLifecycleManager, error) {
+// NewContainerLifecycleManager create new object for container lifecycle manager
+func NewContainerLifecycleManager(kubeletRootDir string) (ContainerLifecycleManager, error) {
 	var err error
 	clcm := &containerLifecycleManagerImpl{}
 	result := make(v1.ResourceList)

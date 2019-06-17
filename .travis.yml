@@ -24,11 +24,15 @@ before_script:
   - cd $HOME/gopath/src/github.com/kubeedge/kubeedge
   - sudo apt-get install build-essential
   - sudo apt-get install gcc-arm-linux-gnueabi
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 install: true
 
 jobs:
   include:
+    - stage: "dep check"
+      script: make depcheck
+      name: " Check if imports, Gopkg.toml, and Gopkg.lock are in sync"
     - stage: "Test Jobs"                # naming the Tests stage
       script: make 
       name: "builds cloud and edge components"            # names the first Tests stage job
@@ -46,3 +50,7 @@ jobs:
       name: "cloud_lint"     # names the eighth Tests stage job
     - script: make keadm_lint
       name: "keadm_lint"
+    - script: make bluetoothdevice
+      name: "build bluetooth_device"
+    - script: make bluetoothdevice_lint
+      name: "bluetooth_device_lint"

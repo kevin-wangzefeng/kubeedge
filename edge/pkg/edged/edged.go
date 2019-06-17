@@ -91,9 +91,19 @@ const (
 	DefaultRootDir                   = "/var/lib/edged"
 	workerResyncIntervalJitterFactor = 0.5
 	//EdgeController gives controller name
-	EdgeController         = "controller"
+	EdgeController = "controller"
+	//DockerContainerRuntime gives Docker container runtime name
 	DockerContainerRuntime = "docker"
+	//RemoteContainerRuntime give Remote container runtime name
 	RemoteContainerRuntime = "remote"
+	//RemoteRuntimeEndpoint gives the default endpoint for CRI runtime
+	RemoteRuntimeEndpoint = "/var/run/containerd/containerd.sock"
+	//MinimumEdgedMemoryCapacity gives the minimum default memory (2G) of edge
+	MinimumEdgedMemoryCapacity = 2147483648
+	//EdgedRootDir gives the default edged root dir
+	EdgedRootDir = "/etc/kubeedge/"
+	//PodSandboxImage gives the default pause container image
+	PodSandboxImage = "k8s.gcr.io/pause"
 )
 
 var (
@@ -119,11 +129,7 @@ type edged struct {
 	nodeStatusUpdateFrequency time.Duration
 	registrationCompleted     bool
 	runtime                   rainerruntime.Runtime
-	// Last timestamp when runtime responded to a ping
-	// Mutex is used to protect this value
-	// runtimeState              *runtimeState
-	// updateRuntimeMux          sync.Mutex
-	containerRuntimeName string
+	containerRuntimeName      string
 	// container runtime
 	containerRuntime   kubecontainer.Runtime
 	podCache           kubecontainer.Cache
@@ -165,7 +171,7 @@ type Config struct {
 	nodeName                 string
 	nodeNamespace            string
 	interfaceName            string
-	memoryCapacity           int
+	memoryCapacity           uint64
 	nodeStatusUpdateInterval time.Duration
 	devicePluginEnabled      bool
 	gpuPluginEnabled         bool
@@ -179,6 +185,7 @@ type Config struct {
 	remoteImageEndpoint      string
 	RuntimeRequestTimeout    metav1.Duration
 	PodSandboxImage          string
+	edgedRootDir             string
 }
 
 func init() {
@@ -303,7 +310,6 @@ func getConfig() *Config {
 	conf.nodeName = config.CONFIG.GetConfigurationByKey("edged.hostname-override").(string)
 	conf.nodeNamespace = config.CONFIG.GetConfigurationByKey("edged.register-node-namespace").(string)
 	conf.interfaceName = config.CONFIG.GetConfigurationByKey("edged.interface-name").(string)
-	conf.memoryCapacity = config.CONFIG.GetConfigurationByKey("edged.memory-capacity").(int)
 	nodeStatusUpdateInterval := config.CONFIG.GetConfigurationByKey("edged.node-status-update-frequency").(int)
 	conf.nodeStatusUpdateInterval = time.Duration(nodeStatusUpdateInterval) * time.Second
 	conf.devicePluginEnabled = config.CONFIG.GetConfigurationByKey("edged.device-plugin-enabled").(bool)
@@ -314,14 +320,33 @@ func getConfig() *Config {
 	conf.version = config.CONFIG.GetConfigurationByKey("edged.version").(string)
 	conf.DockerAddress = config.CONFIG.GetConfigurationByKey("edged.docker-address").(string)
 	conf.runtimeType = config.CONFIG.GetConfigurationByKey("edged.runtime-type").(string)
-	conf.remoteRuntimeEndpoint = config.CONFIG.GetConfigurationByKey("edged.remote-runtime-endpoint").(string)
-	conf.remoteImageEndpoint = config.CONFIG.GetConfigurationByKey("edged.remote-image-endpoint").(string)
-	//runtimeRequestTimeout := config.CONFIG.GetConfigurationByKey("edged.runtime-request-timeout").(int)
-	//conf.RuntimeRequestTimeout = metav1.Duration{Duration: runtimeRequestTimeout * time.Minute}
-	if conf.RuntimeRequestTimeout == zeroDuration {
-		conf.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
+	if conf.runtimeType == "" {
+		conf.runtimeType = DockerContainerRuntime
 	}
-	conf.PodSandboxImage = config.CONFIG.GetConfigurationByKey("edged.podsandbox-image").(string)
+	if conf.runtimeType == RemoteContainerRuntime {
+		conf.memoryCapacity = config.CONFIG.GetConfigurationByKey("edged.edged-memory-capacity-bytes").(uint64)
+		if conf.memoryCapacity == 0 {
+			conf.memoryCapacity = MinimumEdgedMemoryCapacity
+		}
+		conf.remoteRuntimeEndpoint = config.CONFIG.GetConfigurationByKey("edged.remote-runtime-endpoint").(string)
+		if conf.remoteRuntimeEndpoint == "" {
+			conf.remoteRuntimeEndpoint = RemoteRuntimeEndpoint
+		}
+		conf.remoteImageEndpoint = config.CONFIG.GetConfigurationByKey("edged.remote-image-endpoint").(string)
+		//runtimeRequestTimeout := config.CONFIG.GetConfigurationByKey("edged.runtime-request-timeout").(int)
+		//conf.RuntimeRequestTimeout = metav1.Duration{Duration: runtimeRequestTimeout * time.Minute}
+		if conf.RuntimeRequestTimeout == zeroDuration {
+			conf.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
+		}
+		conf.PodSandboxImage = config.CONFIG.GetConfigurationByKey("edged.podsandbox-image").(string)
+		if conf.PodSandboxImage == "" {
+			conf.PodSandboxImage = PodSandboxImage
+		}
+		conf.edgedRootDir = config.CONFIG.GetConfigurationByKey("edged.edged-root-dir").(string)
+		if conf.edgedRootDir == "" {
+			conf.edgedRootDir = EdgedRootDir
+		}
+	}
 	return &conf
 }
 
@@ -441,7 +466,7 @@ func newEdged() (*edged, error) {
 		if ed.os == nil {
 			ed.os = kubecontainer.RealOS{}
 		}
-		ed.clcm, err = clcm.NewContainerLifecycleManager()
+		ed.clcm, err = clcm.NewContainerLifecycleManager(conf.edgedRootDir)
 		var machineInfo cadvisorapi.MachineInfo
 		machineInfo.MemoryCapacity = uint64(conf.memoryCapacity)
 		containerRuntime, err := kuberuntime.NewKubeGenericRuntimeManager(
@@ -515,6 +540,7 @@ func (e *edged) initializeModules() error {
 		}
 
 	default:
+		return fmt.Errorf("unsupported runtime %q", e.containerRuntimeName)
 	}
 	return nil
 }
@@ -744,7 +770,6 @@ func (e *edged) consumePodAddition(namespacedName *types.NamespacedName) error {
 		}
 
 		desiredPodStatus, _ := e.statusManager.GetPodStatus(pod.GetUID())
-		log.LOGGER.Errorf("Syncing pod to  cur status [%s]\n", curPodStatus)
 		result := e.containerRuntime.SyncPod(pod, desiredPodStatus, curPodStatus, secrets, e.podAdditionBackoff)
 		if err := result.Error(); err != nil {
 			// Do not return error if the only failures were pods in backoff
@@ -758,18 +783,8 @@ func (e *edged) consumePodAddition(namespacedName *types.NamespacedName) error {
 
 			return nil
 		}
-		/*curPodStatus.ID = pod.UID
-		var cStatus kubecontainer.ContainerStatus
-		for _, container := range pod.Spec.Containers {
-			cStatus.Name = container.Name
-			cStatus.Image = container.Image
-			cStatus.State = kubecontainer.ContainerStateCreated
-			curPodStatus.ContainerStatuses = append(curPodStatus.ContainerStatuses, &cStatus)
-		}
-		curPodStatus.Name = namespacedName.Name
-		curPodStatus.Namespace = namespacedName.Namespace
-		e.podCache.Set(pod.GetUID(), curPodStatus, err, time.Now())*/
 	default:
+		return fmt.Errorf("unsupported runtime %q", e.containerRuntimeName)
 	}
 
 	e.workQueue.Enqueue(pod.UID, utilwait.Jitter(time.Minute, workerResyncIntervalJitterFactor))
@@ -803,6 +818,7 @@ func (e *edged) consumePodDeletion(namespacedName *types.NamespacedName) error {
 			return fmt.Errorf("consume removed pod [%s] failed, %v", podName, err)
 		}
 	default:
+		return fmt.Errorf("unsupported runtime %q", e.containerRuntimeName)
 	}
 	log.LOGGER.Infof("consume removed pod [%s] successfully\n", podName)
 	return nil

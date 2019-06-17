@@ -584,7 +584,6 @@ func (e *edged) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container
 	// Disabling adding TerminationMessagePath on Windows as these files would be mounted as docker volume and
 	// Docker for Windows has a bug where only directories can be mounted
 	if len(container.TerminationMessagePath) != 0 && runtime.GOOS != "windows" {
-		//p := e.getPodContainerDir(pod.UID, container.Name)
 		p := e.getPodContainerDir(pod.UID, container.Name)
 		if err := os.MkdirAll(p, 0750); err != nil {
 			glog.Errorf("Error on creating %q: %v", p, err)

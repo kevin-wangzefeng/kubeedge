@@ -55,7 +55,9 @@ func NewGenericLifecycle(manager containers.ContainerManager, probeManager probe
 		remoteRuntime: nil,
 		clock:         clock.RealClock{},
 	}
-} //NewGenericLifecycle creates new generic life cycle object
+}
+
+//NewGenericLifecycleRemote creates new generic life cycle object for remote
 func NewGenericLifecycleRemote(runtime kubecontainer.Runtime, probeManager prober.Manager, channelCapacity int,
 	relistPeriod time.Duration, podManager podmanager.Manager, statusManager status.Manager, podCache kubecontainer.Cache, clock clock.Clock, iface string) pleg.PodLifecycleEventGenerator {
 	//kubeContainerManager := containers.NewKubeContainerRuntime(manager)
@@ -426,10 +428,12 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	}
 }
 
+// GetPodStatus gets the pods's status
 func (gl *GenericLifecycle) GetPodStatus(pod *v1.Pod) (v1.PodStatus, bool) {
 	return gl.status.GetPodStatus(pod.UID)
 }
 
+// GetRemotePodStatus gets the pods's status
 func GetRemotePodStatus(gl *GenericLifecycle, podUID types.UID) (*kubecontainer.PodStatus, error) {
 	return gl.podCache.Get(podUID)
 }

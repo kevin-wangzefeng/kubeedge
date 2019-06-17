@@ -24,6 +24,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager"
 )
 
+// InternalContainerLifecycle interface.
 type InternalContainerLifecycle interface {
 	PreStartContainer(pod *v1.Pod, container *v1.Container, containerID string) error
 	PreStopContainer(containerID string) error
@@ -35,6 +36,7 @@ type internalContainerLifecycleImpl struct {
 	cpuManager cpumanager.Manager
 }
 
+// Implements PreStartContainer
 func (i *internalContainerLifecycleImpl) PreStartContainer(pod *v1.Pod, container *v1.Container, containerID string) error {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.CPUManager) {
 		return i.cpuManager.AddContainer(pod, container, containerID)
@@ -42,6 +44,7 @@ func (i *internalContainerLifecycleImpl) PreStartContainer(pod *v1.Pod, containe
 	return nil
 }
 
+// Implements PreStopContainer
 func (i *internalContainerLifecycleImpl) PreStopContainer(containerID string) error {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.CPUManager) {
 		return i.cpuManager.RemoveContainer(containerID)
@@ -49,6 +52,7 @@ func (i *internalContainerLifecycleImpl) PreStopContainer(containerID string) er
 	return nil
 }
 
+// Implements PostStopContainer
 func (i *internalContainerLifecycleImpl) PostStopContainer(containerID string) error {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.CPUManager) {
 		return i.cpuManager.RemoveContainer(containerID)
