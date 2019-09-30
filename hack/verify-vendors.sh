@@ -18,7 +18,9 @@
 
 
 function checkModified {
-	modified=$( git status --short 2>/dev/null | grep -e "^.M" | wc -l)
+	# Any changes including modified, deleted, added and untracked files
+	# will be treated as unacceptable.
+	modified=$( git status --short 2>/dev/null | wc -l)
 
 	if [ ${modified} -eq 0 ]; then
 		echo 0
@@ -27,23 +29,23 @@ function checkModified {
 
 	echo 2
 }
- 
+
+go mod tidy
+ret=$(checkModified)
+if [ ${ret} -eq 0 ]; then
+	echo "SUCCESS: go.mod and go.sum are tidy"
+else
+	echo  "FAILED: go.mod / go.dum needs an update; The diff is:"
+	git diff
+	exit 1
+fi
+
 go mod vendor
 ret=$(checkModified)
 if [ ${ret} -eq 0 ]; then
 	echo "SUCCESS: vendor is up to date"
 else
 	echo  "FAILED: vendor needs an update; The diff is:"
-	git diff
-	exit 1
-fi
-
-go mod tidy
-ret=$(checkModified)
-if [ ${ret} -eq 0 ]; then
-	echo "SUCCESS: go.mod and go.sum are in tiny"
-else
-	echo  "FAILED: go.mod / go.dum needs an update; The diff is:"
 	git diff
 	exit 1
 fi
