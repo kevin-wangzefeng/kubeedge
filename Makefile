@@ -135,9 +135,9 @@ edgesiteimage:
 	--build-arg RUN_FROM=${ARCH}/docker:dind \
 	-f build/edgesite/Dockerfile .
 
-.PHONY: vendorCheck
-vendorCheck:
-	bash build/tools/verifyVendor.sh
+.PHONY: verify_vendors
+verify_vendors:
+	bash hack/verify-vendors.sh
 
 .PHONY: bluetoothdevice
 bluetoothdevice:
