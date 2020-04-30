@@ -5,13 +5,9 @@ venv/*
 *.pyc
 __pycache__
 *.swp
+.idea/
 .idea/*
+
 .gradle
 
-cloud/cloudcore.log
-cloud/cloudcore
-cloud/admission
-edge/edgecore
-edgesite/edgesite
-keadm/keadm
 _output
